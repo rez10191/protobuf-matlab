@@ -37,6 +37,7 @@
 #define FARSOUNDER_PROTOBUF_COMPILER_MATLAB_GENERATOR_H__
 
 #include <string>
+#include "absl/synchronization/mutex.h"
 #include <google/protobuf/compiler/code_generator.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/stubs/common.h>
@@ -65,6 +66,9 @@ class LIBPROTOC_EXPORT MatlabGenerator :
  public:
   MatlabGenerator();
   virtual ~MatlabGenerator();
+
+  MatlabGenerator(const MatlabGenerator&) = delete;
+  MatlabGenerator& operator=(const MatlabGenerator&) = delete;
 
   // implements CodeGenerator ----------------------------------------
   bool Generate(const ::google::protobuf::FileDescriptor* file,
@@ -139,13 +143,11 @@ class LIBPROTOC_EXPORT MatlabGenerator :
 
   // Very coarse-grained lock to ensure that Generate() is reentrant.
   // Guards file_ and printer_.
-  mutable ::google::protobuf::internal::Mutex mutex_;
+  mutable absl::Mutex mutex_;
   mutable const ::google::protobuf::FileDescriptor*
       file_;  // Set in Generate().  Under mutex_.
   mutable ::google::protobuf::compiler::GeneratorContext*
       output_directory_;  // Set in Generate().
-
-  GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(MatlabGenerator);
 };
 
 }  // namespace cpp

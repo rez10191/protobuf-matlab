@@ -39,6 +39,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <regex>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -48,7 +49,11 @@
 #include <google/protobuf/io/printer.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 #include <google/protobuf/descriptor.pb.h>
-#include <google/protobuf/stubs/strutil.h>
+#include <google/protobuf/io/strtod.h>
+#include <absl/strings/str_cat.h>
+#include <absl/strings/str_replace.h>
+
+
 #include <google/protobuf/wire_format.h>
 
 namespace farsounder {
@@ -60,13 +65,7 @@ using ::google::protobuf::Descriptor;
 using ::google::protobuf::FieldDescriptor;
 using ::google::protobuf::FieldDescriptor;
 using ::google::protobuf::FileDescriptor;
-using ::google::protobuf::LowerString;
-using ::google::protobuf::SimpleDtoa;
-using ::google::protobuf::SimpleFtoa;
-using ::google::protobuf::SimpleItoa;
-using ::google::protobuf::StringReplace;
 using ::google::protobuf::compiler::GeneratorContext;
-using ::google::protobuf::internal::MutexLock;
 using ::google::protobuf::io::Printer;
 
 using ::std::make_pair;
@@ -79,6 +78,15 @@ using ::std::stringstream;
 using ::std::vector;
 
 namespace {
+// Copied over from internal 'google/protobuf/stubs/strutil.h'.
+inline void LowerString(std::string* s) {
+  std::string::iterator end = s->end();
+  for (std::string::iterator i = s->begin(); i != end; ++i) {
+    // tolower() changes based on locale.  We don't want this!
+    if ('A' <= *i && *i <= 'Z') *i += 'a' - 'A';
+  }
+}
+
 // CamelToLower taken from Dave Benson's modification for a C implementation
 // of Protocol Buffers
 string CamelToLower(const string &name) {
@@ -145,7 +153,7 @@ bool MatlabGenerator::Generate(const FileDescriptor* file,
                                const string& parameter,
                                GeneratorContext* output_directory,
                                string* error) const {
-  MutexLock lock(&mutex_);
+  absl::MutexLock lock(&mutex_);
   file_ = file;
   output_directory_ = output_directory;
   PrintMessageFunctions();
@@ -274,14 +282,14 @@ void MatlabGenerator::PrintFieldDescriptors(
     printer.Indent();
     m["name"] = field->name();
     m["full_name"] = field->full_name();
-    m["index"] = SimpleItoa(i + 1);
-    m["number"] = SimpleItoa(field->number());
-    m["type"] = SimpleItoa(field->type());
-    m["matlab_type"] = SimpleItoa(kTypeToMatlabTypeMap[field->type()]);
-    m["wire_type"] = SimpleItoa(
+    m["index"] = absl::StrCat(i + 1);
+    m["number"] = absl::StrCat(field->number());
+    m["type"] = absl::StrCat(field->type());
+    m["matlab_type"] = absl::StrCat(kTypeToMatlabTypeMap[field->type()]);
+    m["wire_type"] = absl::StrCat(
         google::protobuf::internal::WireFormat::WireTypeForFieldType(
             field->type()));
-    m["label"] = SimpleItoa(field->label());
+    m["label"] = absl::StrCat(field->label());
     m["default_value"] = DefaultValueToString(*field);
 
     m["read_function"] = MakeReadFunctionHandle(*field);
@@ -329,8 +337,8 @@ void MatlabGenerator::PrintFieldIndecesByNumber(
   for (int i = 0; i < descriptor.field_count(); ++i) {
     field = descriptor.field(sorted_fields[i].second);
     printer.Print("put(descriptor.field_indeces_by_number, uint32($number$), $index$);\n",
-                  "number", SimpleItoa(field->number()),
-                  "index", SimpleItoa(i + 1));
+                  "number", absl::StrCat(field->number()),
+                  "index", absl::StrCat(i + 1));
   }
   printer.Print("\n");
 }
@@ -523,41 +531,41 @@ string MatlabGenerator::DefaultValueToString(
   } else {
     switch(type) {
       case MATLABTYPE_INT32:
-        s << "int32(" << SimpleItoa(field.default_value_int32()) << ")";
+        s << "int32(" << absl::StrCat(field.default_value_int32()) << ")";
         return s.str();
       case MATLABTYPE_INT64:
-        s << "int64(" << SimpleItoa(field.default_value_int64()) << ")";
+        s << "int64(" << absl::StrCat(field.default_value_int64()) << ")";
         return s.str();
       case MATLABTYPE_UINT32:
         s << "uint32(";
         // This is needed as the default values are in a union and if the bool
         // value is set it doesn't set the full 32 bits
         if (field.type() == FieldDescriptor::TYPE_BOOL) {
-          s << SimpleItoa(field.default_value_bool());
+          s << absl::StrCat(field.default_value_bool());
         } else {
-          s << SimpleItoa(field.default_value_uint32());
+          s << absl::StrCat(field.default_value_uint32());
         }
         s << ")";
         return s.str();
       case MATLABTYPE_UINT64:
-        s << "uint64(" << SimpleItoa(field.default_value_uint64()) << ")";
+        s << "uint64(" << absl::StrCat(field.default_value_uint64()) << ")";
         return s.str();
       case MATLABTYPE_DOUBLE:
-        s << "double(" << SimpleDtoa(field.default_value_double()) << ")";
+        s << "double(" << google::protobuf::io::SimpleDtoa(field.default_value_double()) << ")";
         return s.str();
       case MATLABTYPE_SINGLE:
-        s << "single(" << SimpleFtoa(field.default_value_float()) << ")";
+        s << "single(" << google::protobuf::io::SimpleFtoa(field.default_value_float()) << ")";
         return s.str();
       case MATLABTYPE_MESSAGE:
         return "struct([])";
       case MATLABTYPE_ENUM:
-        s << "int32(" << SimpleItoa(field.default_value_enum()->number())<< ")";
+        s << "int32(" << absl::StrCat(field.default_value_enum()->number())<< ")";
         return s.str();
       case MATLABTYPE_STRING:
-        s << "'" << StringReplace(field.default_value_string(), "'", "''", true) << "'";
+        s << "'" << std::regex_replace(field.default_value_string(), std::regex("'"), "''") << "'";
         return s.str();
       case MATLABTYPE_BYTES:
-        s << "uint8('" << StringReplace(field.default_value_string(), "'", "''", true) << "')";
+        s << "uint8('" << std::regex_replace(field.default_value_string(), std::regex("'"), "''") << "')";
         return s.str();
     }
   }
@@ -698,11 +706,11 @@ string MatlabGenerator::MakeWriteFunctionHandle(const FieldDescriptor & field) c
 
 
 string MatlabGenerator::DescriptorFunctionName(const Descriptor & descriptor) const {
-  return "pb_descriptor_" + StringReplace(descriptor.full_name(), ".", "__", true);
+  return "pb_descriptor_" + std::regex_replace(descriptor.full_name(), std::regex("\\."), "__");
 }
 
 string MatlabGenerator::ReadFunctionName(const Descriptor & descriptor) const {
-  return "pb_read_" + StringReplace(descriptor.full_name(), ".", "__", true);
+  return "pb_read_" + std::regex_replace(descriptor.full_name(), std::regex("\\."), "__");
 }
 
 
