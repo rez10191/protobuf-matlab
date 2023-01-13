@@ -141,6 +141,9 @@ class LIBPROTOC_EXPORT MatlabGenerator :
   ::std::string ReadFunctionName(
       const ::google::protobuf::Descriptor & descriptor) const;
 
+  ::std::string CheckAndTruncateIfNeeded(
+      const ::std::string& matlab_str) const;
+
   // Very coarse-grained lock to ensure that Generate() is reentrant.
   // Guards file_ and printer_.
   mutable absl::Mutex mutex_;

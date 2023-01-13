@@ -49,6 +49,7 @@
 #include <google/protobuf/io/printer.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 #include <google/protobuf/descriptor.pb.h>
+//#include <google/protobuf/stubs/strutil.h>
 #include <google/protobuf/io/strtod.h>
 #include <absl/strings/str_cat.h>
 #include <absl/strings/str_replace.h>
@@ -65,7 +66,13 @@ using ::google::protobuf::Descriptor;
 using ::google::protobuf::FieldDescriptor;
 using ::google::protobuf::FieldDescriptor;
 using ::google::protobuf::FileDescriptor;
+//using ::google::protobuf::LowerString;
+//using ::google::protobuf::SimpleDtoa;
+//using ::google::protobuf::SimpleFtoa;
+//using ::google::protobuf::SimpleItoa;
+//using ::google::protobuf::StringReplace;
 using ::google::protobuf::compiler::GeneratorContext;
+//using ::google::protobuf::internal::MutexLock;
 using ::google::protobuf::io::Printer;
 
 using ::std::make_pair;
@@ -76,6 +83,10 @@ using ::std::set;
 using ::std::string;
 using ::std::stringstream;
 using ::std::vector;
+
+static const unsigned int MAX_MATLAB_LENGTH = 63;
+// intentional integer division
+static constexpr unsigned int HALF_MAX_LENGTH = MAX_MATLAB_LENGTH / 2;
 
 namespace {
 // Copied over from internal 'google/protobuf/stubs/strutil.h'.
@@ -706,11 +717,33 @@ string MatlabGenerator::MakeWriteFunctionHandle(const FieldDescriptor & field) c
 
 
 string MatlabGenerator::DescriptorFunctionName(const Descriptor & descriptor) const {
-  return "pb_descriptor_" + std::regex_replace(descriptor.full_name(), std::regex("\\."), "__");
+  std::string output = "pb_desc_" + std::regex_replace(descriptor.full_name(), std::regex("\\."), "_");
+  return CheckAndTruncateIfNeeded(output);
 }
 
 string MatlabGenerator::ReadFunctionName(const Descriptor & descriptor) const {
-  return "pb_read_" + std::regex_replace(descriptor.full_name(), std::regex("\\."), "__");
+  std::string output = "pb_read_" + std::regex_replace(descriptor.full_name(), std::regex("\\."), "_");
+  return CheckAndTruncateIfNeeded(output);
+}
+
+string MatlabGenerator::CheckAndTruncateIfNeeded(const std::string& matlab_str) const
+{
+  // copying this a bunch of times.  Fix if you care.
+  std::string output = matlab_str;
+
+  if (output.length() > MAX_MATLAB_LENGTH)
+  {
+      //TODO: Make not HL specific... sorry internet
+      output = std::regex_replace(output, std::regex("hiddenlevel"), "");
+      // concat the first and last 31 characters and hope for the best.
+      output = (
+          output.substr(0, HALF_MAX_LENGTH) +
+          std::string("_") +
+          output.substr(output.length() - HALF_MAX_LENGTH, HALF_MAX_LENGTH)
+      );
+  }
+
+  return output;
 }
 
 
